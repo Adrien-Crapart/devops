@@ -1,0 +1,75 @@
+volumes:
+  jenkins-data:
+  jira-data:
+  grafana-data:
+    
+networks:
+  network-system:
+    driver: bridge
+
+services:
+  jenkins:
+    container_name: jenkins
+    image: jenkins/jenkins:lts
+    privileged: true
+    user: root
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - network-system
+  
+  jira:
+    container_name: jira
+    image: teamatldocker/jira
+    restart: unless-stopped
+    volumes:
+      - jira-data:/var/atlassian/jira
+    ports:
+      - '80:8080'
+    environment:
+      - JIRA_DATABASE_URL=${JIRA_DATABASE_URL:-jdbc:postgresql://postgres:5432/jiradb}
+      - JIRA_DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - SETENV_JVM_MINIMUM_MEMORY=${JIRA_JVM_MINIMUM_MEMORY:-1024m}
+      - SETENV_JVM_MAXIMUM_MEMORY=${JIRA_JVM_MAXIMUM_MEMORY:-4096m}
+      - JIRA_PROXY_NAME=${JIRA_PROXY_NAME:-}
+      - JIRA_PROXY_PORT=${JIRA_PROXY_PORT:-}
+      - JIRA_PROXY_SCHEME=${JIRA_PROXY_SCHEME:-}
+    depends_on:
+      - postgres
+    logging:
+      # limit logs retained on host to 25MB
+      driver: "json-file"
+      options:
+        max-size: "500k"
+        max-file: "50"
+    networks:
+      - network-system
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana-enterprise
+    restart: unless-stopped
+    ports:
+     - '3000:3000'
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - network-system
+  
+  terraform:
+    container_name: terraform
+    image: hashicorp/terraform:0.14.10
+    volumes:
+      - .:/infra
+    working_dir: /infra
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
+    networks:
+      - network-system
